@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="1">
+<package type="rpm">
+  <name>raw_setup</name>
+  <arch>aarch64</arch>
+  <version epoch="0" ver="0.10.0" rel="1.fc42"/>
+  <checksum type="sha256" pkgid="YES">4dee47360d21706aa65f4bb1c74f6d61018905b7b896c05ec2699ab9f9b7c1ee</checksum>
+  <summary>Initial setup scripts for Marquee Display Servers.</summary>
+  <description>This package installs the initial setup scripts and assets for a
+Marquee Display Server, preparing a clean Fedora Workstation environment.</description>
+  <packager></packager>
+  <url>http://10.0.0.149</url>
+  <time file="1754928662" build="1754927954"/>
+  <size package="2437923" installed="2467821" archive="2468740"/>
+  <location href="aarch64/raw_setup-0.10.0-1.fc42.aarch64.rpm"/>
+  <format>
+    <rpm:license>Proprietary</rpm:license>
+    <rpm:vendor></rpm:vendor>
+    <rpm:group>Unspecified</rpm:group>
+    <rpm:buildhost>nuc</rpm:buildhost>
+    <rpm:sourcerpm>raw_setup-0.10.0-1.fc42.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="7993"/>
+    <rpm:provides>
+      <rpm:entry name="raw_setup" flags="EQ" epoch="0" ver="0.10.0" rel="1.fc42"/>
+      <rpm:entry name="raw_setup(aarch-64)" flags="EQ" epoch="0" ver="0.10.0" rel="1.fc42"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="/bin/sh" pre="1"/>
+      <rpm:entry name="/usr/bin/bash"/>
+      <rpm:entry name="/usr/bin/python3"/>
+      <rpm:entry name="dnf-plugins-core"/>
+      <rpm:entry name="flatpak"/>
+      <rpm:entry name="g++"/>
+      <rpm:entry name="gcc"/>
+      <rpm:entry name="gnome-monitor-config"/>
+      <rpm:entry name="gnome-shell-extension-no-overview"/>
+      <rpm:entry name="gnome-tweaks"/>
+      <rpm:entry name="libjpeg-turbo-devel"/>
+      <rpm:entry name="python3-pip"/>
+      <rpm:entry name="python3-tkinter"/>
+      <rpm:entry name="zlib-devel"/>
+    </rpm:requires>
+  </format>
+</package>
+</metadata>
