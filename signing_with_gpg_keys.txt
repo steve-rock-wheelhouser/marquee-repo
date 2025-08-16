@@ -1,0 +1,244 @@
+#====================================================================
+#  Signing Software with GPG Keys
+#====================================================================
+
+# The process involves three main parts:
+
+# 1. Create a GPG Key: Generate your own unique cryptographic key for signing.
+
+# 2. Sign the RPM: Modify your build process to sign the package with your key.
+
+# 3. Publish Your Public Key: Place your public key in your repository so dnf can use it for verification.
+
+#---------------------------------------------------
+# Step 1: Create Your GPG Signing Key
+#---------------------------------------------------
+# You only need to do this once. Run these commands on your development machine (nuc).
+gpg --full-generate-key
+
+# Follow the Prompts:
+
+# When asked for key type, choose (1) RSA and RSA.
+# For key size, enter 4096.
+# For expiration, you can choose 0 (does not expire) or a duration like 1y.
+# Enter your Real Name, Email Address, and a Comment (e.g., "Marquee Project Signing Key").
+# Finally, enter a secure passphrase. This is the password you will use to sign each build.
+
+# Find Your Key ID: After the key is created, you need its unique ID.
+gpg --list-secret-keys --keyid-format=long
+
+# The output will look something like this. Your Key ID is the long string of characters after rsa4096/.
+
+# sec   rsa4096/A1B2C3D4E5F6G7H8 2025-08-15 [SC]
+#       XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# uid                 [ultimate] Your Name (Marquee Project Signing Key) <your.email@example.com>
+
+# In this example, the Key ID is A1B2C3D4E5F6G7H8.
+
+#---------------------------------------------------
+# Step 2: Configure RPM to Use Your Key
+#---------------------------------------------------
+# Edit the .rpmmacros file: Open (or create) the file ~/.rpmmacros in your home directory.
+nano ~/.rpmmacros
+
+# Add these lines, replacing the placeholder with your actual Key ID:
+%_signature gpg
+%_gpg_name C6E18BA1F8C76776
+
+# Save and close the file.
+
+#---------------------------------------------------
+# Step 3: Update Your Build Script
+#---------------------------------------------------
+# Modify your build.sh script to add the --sign flag to the rpmbuild command.
+
+# Find
+rpmbuild -ba --define "_topdir ${RPM_BUILD_DIR}" "${RPM_BUILD_DIR}/SPECS/${SPEC_FILE}"
+
+# Change it to this:
+rpmbuild -ba --sign --define "_topdir ${RPM_BUILD_DIR}" "${RPM_BUILD_DIR}/SPECS/${SPEC_FILE}"
+
+# When you run the script now, it will prompt you for the GPG passphrase you created in Step 1.
+
+#---------------------------------------------------
+# Step 4: Publish Your Public Key
+#---------------------------------------------------
+# You need to make your public key available so dnf can download it.
+
+# Export the Public Key: On your nuc, run this command, replacing the placeholder with your Key ID. This creates a file named RPM-GPG-KEY-marquee.
+gpg --export -a "C6E18BA1F8C76776" > ~/RPM-GPG-KEY-marquee
+
+# Copy the Key to Your DNF Repository:
+cp ~/RPM-GPG-KEY-marquee /home/user/marquee-magic_repo/
+
+# Add and Push the Key to GitHub:
+cd /home/user/marquee-magic_repo
+git add RPM-GPG-KEY-marquee
+git commit -m "Add GPG public key for repository"
+git push
+
+#---------------------------------------------------
+# Step 5: Update the Repository File on the Target Machine
+#---------------------------------------------------
+
+# Finally, update the .repo file on your target machine to tell it to use your key.
+# Edit the repo file:
+sudo nano /etc/yum.repos.d/marquee-repo.repo
+
+# Modify the file to look like this. You are changing gpgcheck=0 to gpgcheck=1 and adding the gpgkey line.
+
+[marquee-repo]
+name=Marquee-Magic Repository (GitHub)
+baseurl=https://raw.githubusercontent.com/steve-rock-wheelhouser/marquee-magic_repo/main
+enabled=1
+gpgcheck=1
+gpgkey=https://raw.githubusercontent.com/steve-rock-wheelhouser/marquee-magic_repo/main/RPM-GPG-KEY-marquee
+
+# Save and close the file.
+
+#-------------------------------------------
+#Done!
+#-------------------------------------------
+# Your entire pipeline is now secure. The next time you run sudo dnf update, it will first download your GPG key, ask you to trust it, and then verify the signature on the marquee-server RPM before installing.
+# Signing your builds with a GPG (GnuPG) key is the correct and professional way to resolve the GPG check warnings. It provides a cryptographic guarantee that the packages were created by you and have not been tampered with.
+
+# Here is the complete, end-to-end process to set up signing for your repository.
+
+#-----------------------------------------------------------------------
+# Step 1: Create Your GPG Key
+#-----------------------------------------------------------------------
+gpg --full-generate-key
+gpg --list-secret-keys --keyid-format=long
+
+#-----------------------------------------------------------------------
+# Step 2: Export Your Public Key
+#-----------------------------------------------------------------------
+# You need to make your public key available so dnf can use it for verification.
+# Export the key to a file. Replace YOUR_KEY_ID with the ID you found above.
+gpg --armor --export YOUR_KEY_ID > RPM-GPG-KEY-Marquee
+
+#Copy this new file into the root of your DNF repository.
+cp RPM-GPG-KEY-Marquee /home/user/marquee-magic_repo/
+
+#-----------------------------------------------------------------------
+# Step 3: Update Your build.sh Script to Sign Packages
+#-----------------------------------------------------------------------
+# Modify the build script to use your new key.
+# It will now use the --sign flag with rpmbuild.
+# It will also sign the repository metadata itself.
+
+#Here is the final, updated build.sh:
+
+
+#!/bin/bash
+
+# build.sh: A script to automatically increment the version,
+# build and sign the RPM, and push it to a DNF Git repo.
+
+set -e
+set -o pipefail
+
+# --- Configuration ---
+PROJECT_NAME="marquee-server"
+SPEC_FILE="${PROJECT_NAME}.spec"
+DNF_REPO_DIR="/home/user/marquee-magic_repo"
+# The "Real name" you used when creating your GPG key.
+GPG_KEY_NAME="Marquee Magic Repo"
+
+# --- Source File Definition ---
+SOURCE_FILES=(
+    "marquee_pkg/"
+    "systemd/"
+    "pyproject.toml"
+    "MANIFEST.in"
+    "README.md"
+)
+
+# --- Script Logic ---
+
+# 1. Increment Version number
+echo "Incrementing RPM Version number..."
+CURRENT_VERSION=$(grep -i '^Version:' ${SPEC_FILE} | awk '{print $2}')
+MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
+NEW_PATCH=$((PATCH + 1))
+NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+sed -i "s/^Version:.*/Version:        ${NEW_VERSION}/" ${SPEC_FILE}
+sed -i "s/^Release:.*/Release:        1%\{?dist\}/" ${SPEC_FILE}
+echo "New version: ${NEW_VERSION}-1"
+
+# 2. Set up temporary directories
+RPM_BUILD_DIR=$(mktemp -d)
+STAGING_DIR="${RPM_BUILD_DIR}/STAGING/${PROJECT_NAME}-${NEW_VERSION}"
+echo "Using temporary build directory: ${RPM_BUILD_DIR}"
+mkdir -p "${RPM_BUILD_DIR}"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+mkdir -p "${STAGING_DIR}"
+
+# 3. Assemble and create source tarball
+echo "Assembling source files..."
+for item in "${SOURCE_FILES[@]}"; do
+    cp -a "$item" "${STAGING_DIR}/"
+done
+SOURCE_TARBALL="${PROJECT_NAME}-${NEW_VERSION}.tar.gz"
+echo "Creating source tarball: ${SOURCE_TARBALL}"
+(cd "${RPM_BUILD_DIR}/STAGING" && tar -czf "${RPM_BUILD_DIR}/SOURCES/${SOURCE_TARBALL}" "${PROJECT_NAME}-${NEW_VERSION}")
+sed -i "s/^Source0:.*/Source0:        %{name}-%{version}.tar.gz/" ${SPEC_FILE}
+cp "${SPEC_FILE}" "${RPM_BUILD_DIR}/SPECS/"
+
+# 4. Build and Sign the RPM
+echo "Building and signing RPM..."
+# Add --sign flag and define the gpg_name
+rpmbuild -ba --sign \
+    --define "_topdir ${RPM_BUILD_DIR}" \
+    --define "_gpg_name ${GPG_KEY_NAME}" \
+    "${RPM_BUILD_DIR}/SPECS/${SPEC_FILE}"
+
+RPM_FILE=$(find "${RPM_BUILD_DIR}/RPMS" -name "*.rpm" | head -n 1)
+if [ ! -f "${RPM_FILE}" ]; then
+    echo "Error: RPM build failed."
+    exit 1
+fi
+echo "Successfully built and signed RPM: ${RPM_FILE}"
+
+# --- Publishing to DNF Repository ---
+# 5. Clean, copy, and update metadata
+echo "Cleaning old RPMs and copying new one..."
+(cd "${DNF_REPO_DIR}" && rm -f aarch64/${PROJECT_NAME}-*.noarch.rpm || true)
+cp "${RPM_FILE}" "${DNF_REPO_DIR}/aarch64/"
+echo "Updating repository metadata..."
+createrepo_c --update "${DNF_REPO_DIR}"
+
+# 6. Sign the repository metadata
+echo "Signing repository metadata..."
+(cd "${DNF_REPO_DIR}" && gpg --detach-sign --armor -u "${GPG_KEY_NAME}" repodata/repomd.xml)
+
+# 7. Commit and push
+echo "Committing and pushing to GitHub..."
+(cd "${DNF_REPO_DIR}" && git add . && git commit -m "Update DNF repository with ${PROJECT_NAME}-${NEW_VERSION}-1" && git push)
+
+# 8. Clean up
+echo "Cleaning up temporary directory..."
+rm -rf "${RPM_BUILD_DIR}"
+
+echo "Process complete. Signed RPM published to your DNF repository."
+
+#-----------------------------------------------------------------------
+# Step 4: Update the Repository File on Your Target Machine
+#-----------------------------------------------------------------------
+# Finally, you need to tell dnf on your target machine to check for signatures and where to find your public key.
+# Replace the contents of /etc/yum.repos.d/marquee-repo.repo on your target machine with this:
+Ini, TOML
+
+[marquee-repo]
+name=Marquee-Magic Repository (GitHub)
+baseurl=https://raw.githubusercontent.com/steve-rock-wheelhouser/marquee-magic_repo/main
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://raw.githubusercontent.com/steve-rock-wheelhouser/marquee-magic_repo/main/RPM-GPG-KEY-Marquee
+
+# The two important new lines are gpgcheck=1 (check packages) and repo_gpgcheck=1 (check the repository itself), along with the gpgkey= URL pointing to your public key file.
+
+# Now, when you run sudo dnf update, it will be a fully secure and verified process.
+
