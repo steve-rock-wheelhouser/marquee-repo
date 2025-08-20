@@ -1,0 +1,5 @@
+#!/bin/bash
+# This script resets all NetworkManager connections and cycles the Wi-Fi radio.
+# It provides a clean name for the pkexec authentication prompt.
+
+nmcli -t -f UUID c | xargs -r -I {} nmcli c delete {} && nmcli r wifi off && nmcli r wifi on
