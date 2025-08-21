@@ -1,12 +1,11 @@
 #!/bin/bash
 
-# test_repo.sh: A script to diagnose the health and contents of the local DNF repository.
+# test_repo.sh: A script to diagnose the health and list all contents of the local DNF repository.
 
 set -e
 
 # --- Configuration ---
 DNF_REPO_DIR="/home/user/marquee-magic_repo"
-PACKAGE_NAME="marquee-server"
 TEMP_XML_FILE="/tmp/primary.xml"
 
 # --- Helper Functions ---
@@ -47,43 +46,42 @@ fi
 print_success "Metadata index file 'repomd.xml' is valid."
 
 # 4. Decompress the primary metadata file
-echo "--- Decompressing Primary Metadata ---"
+print_info "--- Decompressing Primary Metadata ---"
 PRIMARY_XML_PATH=$(awk '/type="primary"/,/<\/data>/ {if(/href=/) {gsub(/.*href="|"\/>/,""); print}}' "$REPOMD_FILE")
 if [ -z "$PRIMARY_XML_PATH" ]; then
     print_error "Could not find the path to the primary XML file inside repomd.xml."
 fi
 
-# Ensure the path is relative to the repo dir for unzstd
 FULL_ZST_PATH="${DNF_REPO_DIR}/${PRIMARY_XML_PATH}"
 
 if [ ! -f "$FULL_ZST_PATH" ]; then
     print_error "Compressed primary metadata file not found at ${FULL_ZST_PATH}"
 fi
 
-unzstd "$FULL_ZST_PATH" -o "$TEMP_XML_FILE"
+# Use -f to force overwrite of the temp file without prompting
+unzstd -f "$FULL_ZST_PATH" -o "$TEMP_XML_FILE"
 print_success "Decompressed primary metadata to ${TEMP_XML_FILE}"
 
-# 5. Analyze the contents for the specified package
-echo "--- Analyzing Repository Contents for '${PACKAGE_NAME}' ---"
-PACKAGE_COUNT=$(grep -c "<name>${PACKAGE_NAME}</name>" "$TEMP_XML_FILE")
+# 5. Analyze the contents for all packages
+print_info "--- Analyzing Repository Contents ---"
 
-if [ "$PACKAGE_COUNT" -eq 0 ]; then
-    print_error "Package '${PACKAGE_NAME}' was not found in the repository metadata."
+# Use awk to find every package block and print its location href line.
+PACKAGE_LIST=$(awk '
+/<package type="rpm"/ { in_pkg=1 }
+/location href/ && in_pkg { gsub(/.*href="aarch64\/|"\/>/,""); print }
+/<\/package>/ { in_pkg=0 }
+' "$TEMP_XML_FILE")
+
+if [ -z "$PACKAGE_LIST" ]; then
+    print_error "No packages were found in the repository metadata."
 fi
 
-print_info "Found ${PACKAGE_COUNT} entr(y/ies) for '${PACKAGE_NAME}'."
-
-# List all found versions
-print_info "Listing all advertised versions:"
-grep -A 2 "<name>${PACKAGE_NAME}</name>" "$TEMP_XML_FILE" | grep 'location href'
-
-if [ "$PACKAGE_COUNT" -gt 1 ]; then
-    print_error "Multiple versions of '${PACKAGE_NAME}' found in the metadata. This is the source of the DNF issue. Please run the build script that cleans the 'repodata' directory."
-fi
-
-LATEST_VERSION=$(grep -A 2 "<name>${PACKAGE_NAME}</name>" "$TEMP_XML_FILE" | grep 'location href' | sed -n 's/.*href="aarch64\/\(.*\).rpm".*/\1/p')
-
-print_success "Repository is pristine. The only advertised version is: ${LATEST_VERSION}"
+PACKAGE_COUNT=$(echo "$PACKAGE_LIST" | wc -l)
+print_success "Found ${PACKAGE_COUNT} total package(s) in the repository."
+print_info "Listing all advertised packages:"
+echo "----------------------------------------"
+echo "$PACKAGE_LIST"
+echo "----------------------------------------"
 echo "--- Test Complete ---"
 
 # Clean up
